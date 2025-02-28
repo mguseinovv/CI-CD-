@@ -1,0 +1,83 @@
+default:
+  tags:
+    - server_for_runner
+
+stages:
+  - build
+  - fail
+  - clang-format
+  - test
+  - deploy
+  - notification
+
+build_job:
+  stage: build
+  script:
+    - echo "start building"
+    - cd src/cat
+    - make
+    - cd ../grep
+    - make
+    - echo "end building"
+    - ../tg.sh "build stage is ok"
+  artifacts:
+    paths:
+      - src/cat
+      - src/grep
+    expire_in: 1 days
+  allow_failure: false
+
+failure_job:
+  stage: fail
+  script:
+    - echo "start build code-sample"
+    - cd code-samples
+    - make
+    - echo "code-sample built"
+    - ../tg.sh "code-sample build is ok"
+  artifacts:
+    paths:
+      - code-samples
+  needs:
+    - build_job
+  when: on_failure
+
+clang-format_job:
+  stage: clang-format
+  script:
+    - echo "start clang-format"
+    - ./code-style.sh
+    - ./tg.sh "code style is ok"
+  needs:
+    - job: build_job
+      artifacts: false
+
+test_job:
+  stage: test
+  script:
+    - echo "start tests"
+    - cd cat
+    - ./tests.sh
+    - cd ../grep
+    - ./test_func_grep.sh
+    - echo "end tests"
+    - ../tg.sh "tests are ok"
+  needs:
+    - job: build_job
+      artifacts: true
+
+deploy_job:
+  stage: deploy
+  script:
+    - echo "start deploying"
+    - deploy.sh
+    - echo "end deploying"
+    - ./tg.sh "deploy stage is ok"
+  when: manual
+
+notifier_job:
+  stage: notification
+  when: on_failure
+  script:
+    - ./tg.sh "Pipeline ymer"
+    - exit 1
